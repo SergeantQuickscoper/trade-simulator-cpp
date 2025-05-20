@@ -1,40 +1,38 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
+#include <map>
 
 class FeeModel {
 public:
     FeeModel();
     ~FeeModel();
 
-    // Initialize fee structure for an exchange
-    void initialize(const std::string& exchange, 
-                   double makerFee, 
-                   double takerFee,
-                   double minFee = 0.0,
-                   double maxFee = 0.0);
+    // Initialize fee model for a specific exchange
+    void initialize(const std::string& exchange, const std::string& feeTier);
 
-    // Calculate fees for a trade
-    double calculateFee(double orderSize, 
-                       double price, 
-                       bool isMaker = false,
-                       const std::string& orderType = "market");
+    // Calculate fees for a market order
+    double calculateFees(double orderSize, double price, bool isMaker);
+
+    // Update fee tier
+    void updateFeeTier(const std::string& feeTier);
 
     // Get current fee rates
-    double getMakerFee() const;
-    double getTakerFee() const;
-
-    // Update fee structure
-    void updateFees(double makerFee, double takerFee);
+    double getMakerFeeRate() const;
+    double getTakerFeeRate() const;
 
 private:
-    struct FeeStructure {
-        double makerFee;
-        double takerFee;
-        double minFee;
-        double maxFee;
-    };
+    std::string exchange_;
+    std::string feeTier_;
+    double makerFeeRate_;
+    double takerFeeRate_;
 
-    std::unordered_map<std::string, FeeStructure> feeStructures_;
+    // Fee tier definitions for different exchanges
+    struct FeeTier {
+        double makerRate;
+        double takerRate;
+    };
+    
+    std::map<std::string, FeeTier> okxFeeTiers_;
+    void initializeOKXFeeTiers();
 }; 

@@ -10,24 +10,62 @@ Simulator::Simulator()
     , marketImpactModel_(std::make_unique<MarketImpactModel>())
     , initialCapital_(0.0)
     , currentCapital_(0.0)
-    , currentPosition_(0.0) {}
+    , currentPosition_(0.0)
+    , currentVolatility_(0.0) {}
 
 Simulator::~Simulator() = default;
 
-void Simulator::initialize(const std::string& exchange,
-                         const std::string& symbol,
-                         double initialCapital) {
+void Simulator::initialize(const std::string& exchange, const std::string& spotAsset) {
     exchange_ = exchange;
-    symbol_ = symbol;
-    initialCapital_ = initialCapital;
-    currentCapital_ = initialCapital;
-    currentPosition_ = 0.0;
+    spotAsset_ = spotAsset;
+    
+    feeModel_->initialize(exchange, "tier1");
+    marketImpactModel_->initialize(0.02, 1000000.0);
+}
 
-    // Initialize fee model with exchange-specific parameters
-    feeModel_->initialize(exchange, 0.001, 0.002);  // Example: 0.1% maker, 0.2% taker
+TradeMetrics Simulator::simulateMarketOrder(double quantityUSD) {
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    double slippage = slippageModel_->predictSlippage(quantityUSD, 0.0);
+    double fees = feeModel_->calculateFees(quantityUSD, 0.0, false);
+    double impact = marketImpactModel_->calculateMarketImpact(quantityUSD, 0.0, 1.0);
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    double latency = std::chrono::duration<double, std::milli>(end - start).count();
+    
+    return TradeMetrics{
+        slippage,
+        fees,
+        impact,
+        slippage + fees + impact,
+        calculateMakerTakerProportion(OrderBook()),
+        latency
+    };
+}
 
-    // Initialize market impact model with default parameters
-    marketImpactModel_->initialize(1000000.0, 0.02);  // Example: $1M daily volume, 2% volatility
+void Simulator::updateMarketData(const OrderBook& orderbook) {
+    slippageModel_->update(orderbook.getMidPrice(), orderbook.getTotalVolume(), 0.0);
+}
+
+double Simulator::getCurrentVolatility() const {
+    return currentVolatility_;
+}
+
+std::string Simulator::getCurrentFeeTier() const {
+    return currentFeeTier_;
+}
+
+double Simulator::calculateMakerTakerProportion(const OrderBook& orderbook) {
+    double bidVolume = orderbook.getBidVolume();
+    double askVolume = orderbook.getAskVolume();
+    return bidVolume / (bidVolume + askVolume);
+}
+
+double Simulator::measureInternalLatency() {
+    auto start = std::chrono::high_resolution_clock::now();
+    simulateMarketOrder(100.0);
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 TradeResult Simulator::simulateTrade(double orderSize,
@@ -70,20 +108,6 @@ TradeResult Simulator::simulateTrade(double orderSize,
     }
 
     return result;
-}
-
-void Simulator::updateMarketData(const OrderBook& orderbook) {
-    // Update slippage model with new market data
-    auto bestAsk = orderbook.getBestAsk();
-    auto bestBid = orderbook.getBestBid();
-    
-    if (bestAsk && bestBid) {
-        double midPrice = (bestAsk->price + bestBid->price) / 2.0;
-        double spread = bestAsk->price - bestBid->price;
-        
-        // Update models with new market data
-        slippageModel_->update(midPrice, spread, std::chrono::system_clock::now().time_since_epoch().count());
-    }
 }
 
 double Simulator::getCurrentCapital() const {

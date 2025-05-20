@@ -14,11 +14,18 @@ public:
                    const std::vector<double>& volumes,
                    const std::vector<double>& timeStamps);
 
-    // Predict slippage for a given order size and price
-    double predictSlippage(double orderSize, double currentPrice, double confidenceLevel = 0.95);
+    // Predict slippage using quantile regression
+    double predictSlippage(double orderSize, 
+                          double currentPrice, 
+                          double quantile = 0.95);
 
     // Update the model with new data point
     void update(double price, double volume, double timeStamp);
+
+    // Get model statistics
+    double getMeanSlippage() const;
+    double getSlippageStdDev() const;
+    double getSlippageQuantile(double quantile) const;
 
     // Save/load model parameters
     void saveModel(const std::string& filename);
