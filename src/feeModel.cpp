@@ -1,66 +1,48 @@
 #include "feeModel.hpp"
-#include <algorithm>
 
-FeeModel::FeeModel() = default;
+FeeModel::FeeModel()
+    : makerFeeRate_(0.001)
+    , takerFeeRate_(0.002) {
+    initializeOKXFeeTiers();
+}
+
 FeeModel::~FeeModel() = default;
 
-void FeeModel::initialize(const std::string& exchange, 
-                         double makerFee, 
-                         double takerFee,
-                         double minFee,
-                         double maxFee) {
-    FeeStructure fees;
-    fees.makerFee = makerFee;
-    fees.takerFee = takerFee;
-    fees.minFee = minFee;
-    fees.maxFee = maxFee;
+void FeeModel::initialize(const std::string& exchange, const std::string& feeTier) {
+    exchange_ = exchange;
+    feeTier_ = feeTier;
     
-    feeStructures_[exchange] = fees;
+    if (exchange == "OKX") {
+        auto it = okxFeeTiers_.find(feeTier);
+        if (it != okxFeeTiers_.end()) {
+            makerFeeRate_ = it->second.makerRate;
+            takerFeeRate_ = it->second.takerRate;
+        }
+    }
 }
 
-double FeeModel::calculateFee(double orderSize, 
-                            double price, 
-                            bool isMaker,
-                            const std::string& orderType) {
-    // Get the fee structure for the current exchange
-    auto it = feeStructures_.begin();  // For now, just use the first exchange's fees
-    if (it == feeStructures_.end()) {
-        return 0.0;  // No fee structure defined
-    }
-    
-    const auto& fees = it->second;
-    
-    // Calculate base fee
-    double feeRate = isMaker ? fees.makerFee : fees.takerFee;
-    double baseFee = orderSize * price * feeRate;
-    
-    // Apply minimum fee if specified
-    if (fees.minFee > 0.0) {
-        baseFee = std::max(baseFee, fees.minFee);
-    }
-    
-    // Apply maximum fee if specified
-    if (fees.maxFee > 0.0) {
-        baseFee = std::min(baseFee, fees.maxFee);
-    }
-    
-    return baseFee;
+double FeeModel::calculateFees(double orderSize, double price, bool isMaker) {
+    double feeRate = isMaker ? makerFeeRate_ : takerFeeRate_;
+    return orderSize * price * feeRate;
 }
 
-double FeeModel::getMakerFee() const {
-    auto it = feeStructures_.begin();
-    return (it != feeStructures_.end()) ? it->second.makerFee : 0.0;
+void FeeModel::updateFeeTier(const std::string& feeTier) {
+    feeTier_ = feeTier;
+    initialize(exchange_, feeTier);
 }
 
-double FeeModel::getTakerFee() const {
-    auto it = feeStructures_.begin();
-    return (it != feeStructures_.end()) ? it->second.takerFee : 0.0;
+double FeeModel::getMakerFeeRate() const {
+    return makerFeeRate_;
 }
 
-void FeeModel::updateFees(double makerFee, double takerFee) {
-    auto it = feeStructures_.begin();
-    if (it != feeStructures_.end()) {
-        it->second.makerFee = makerFee;
-        it->second.takerFee = takerFee;
-    }
+double FeeModel::getTakerFeeRate() const {
+    return takerFeeRate_;
+}
+
+void FeeModel::initializeOKXFeeTiers() {
+    okxFeeTiers_["tier1"] = {0.0008, 0.001};  // 0.08% maker, 0.1% taker
+    okxFeeTiers_["tier2"] = {0.0007, 0.0009}; // 0.07% maker, 0.09% taker
+    okxFeeTiers_["tier3"] = {0.0006, 0.0008}; // 0.06% maker, 0.08% taker
+    okxFeeTiers_["tier4"] = {0.0005, 0.0007}; // 0.05% maker, 0.07% taker
+    okxFeeTiers_["tier5"] = {0.0004, 0.0006}; // 0.04% maker, 0.06% taker
 } 
